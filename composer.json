@@ -1,0 +1,48 @@
+{
+  "name": "besnovatyj/yii2-cms-search-tnt",
+  "description": "Ядро сквозного поиска на TNTSearch для Yii2 CMS: полнотекстовый индекс BM25 со стеммингом русского и поиском с опечатками, размещённый в базе проекта. Подключается к фасаду besnovatyj/yii2-cms-search, отдельного демона не требует.",
+  "type": "yii2-extension",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Besnovatyj",
+      "email": "your-email@example.com"
+    }
+  ],
+  "minimum-stability": "stable",
+  "extra": {
+    "bescms": { "kind": "package" }
+  },
+  "keywords": [
+    "yii2",
+    "cms",
+    "search",
+    "tntsearch",
+    "fulltext"
+  ],
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "yiisoft/yii2-composer": true
+    },
+    "fxp-asset": {
+      "enabled": false
+    }
+  },
+  "require": {
+    "php": ">=8.4",
+    "ext-mbstring": "*",
+    "ext-pdo": "*",
+    "yiisoft/yii2": "~2.0.0",
+    "besnovatyj/yii2-cms-search": "^1.0",
+    "teamtnt/tntsearch": "^5.3"
+  },
+  "require-dev": {
+    "roave/security-advisories": "dev-latest"
+  },
+  "autoload": {
+    "psr-4": {
+      "Besnovatyj\\SearchTnt\\": "src/"
+    }
+  }
+}
