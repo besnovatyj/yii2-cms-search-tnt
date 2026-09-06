@@ -199,11 +199,25 @@ final class TntSearchEngine implements SearchEngineInterface
         $this->dropIndexTables($slot);
         $this->map->clear($slot);
 
+        $name = $this->indexName($slot);
+
         $tnt = new TNTSearch();
         $tnt->loadConfig($this->config->create());
 
-        $indexer = $tnt->createIndex($this->indexName($slot), true);
+        // createIndex() лишь заводит таблицы и возвращает ДВИЖОК, а не индексатор; сам индексатор
+        // отдаёт getIndex(), и только после selectIndex() — тот подтягивает стеммер и токенизатор
+        // выбранного индекса. Порядок вызовов здесь существенный, менять его нельзя.
+        $tnt->createIndex($name, true);
+        $tnt->selectIndex($name);
+
+        $indexer = $tnt->getIndex();
         $indexer->setPrimaryKey('id');
+        $indexer->disableOutput(true);
+
+        // Стеммер ставим явно тем же классом, что и при поиске: собранный другим стеммером индекс
+        // молча перестал бы отвечать на запросы — совпадений просто не находилось бы.
+        $stemmerClass = $this->config->stemmerClass();
+        $indexer->setStemmer(new $stemmerClass());
 
         $this->indexer = $indexer;
     }
