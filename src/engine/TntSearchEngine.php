@@ -72,6 +72,12 @@ final class TntSearchEngine implements SearchEngineInterface
     /** @var array<int, string> накопленные соответствия «id документа => раздел» */
     private array $pendingTypes = [];
 
+    /** Проверялась ли готовность ядра в этом запросе. */
+    private bool $availabilityChecked = false;
+
+    /** Причина неготовности; null — ядро готово (значимо только после проверки). */
+    private ?string $unavailableReason = null;
+
     public function __construct(
         private readonly TntConfigFactory $config,
         private readonly DocumentTypeMap $map,
@@ -102,17 +108,39 @@ final class TntSearchEngine implements SearchEngineInterface
      */
     public function isAvailable(): bool
     {
+        return $this->unavailableReason() === null;
+    }
+
+    /**
+     * Почему ядро не готово: индекса ещё нет или база недоступна.
+     *
+     * Различать нужно по той же причине, что и у ядра с демоном: «индекс не собран» — это штатное
+     * состояние сразу после установки, лечится кнопкой пересборки, а ошибка базы — авария.
+     * Проверка выполняется один раз за запрос.
+     */
+    public function unavailableReason(): ?string
+    {
+        if ($this->availabilityChecked) {
+            return $this->unavailableReason;
+        }
+
+        $this->availabilityChecked = true;
+
         try {
             // Имя без плейсхолдера `{{%…}}`: таблицы индекса создаёт сама библиотека своим
             // подключением, префикс таблиц Yii к ним не применяется.
             $table = self::INDEX_PREFIX . $this->map->activeSlot() . '_wordlist';
 
-            return Yii::$app->db->getTableSchema($table, true) !== null;
+            $this->unavailableReason = Yii::$app->db->getTableSchema($table, true) !== null
+                ? null
+                : 'Индекс ещё ни разу не собирали этим ядром: таблиц рабочего слота нет.';
         } catch (Throwable $e) {
-            Yii::warning('TNTSearch недоступен: ' . $e->getMessage(), 'search/tnt');
+            $this->unavailableReason = 'Ошибка базы данных: ' . $e->getMessage();
 
-            return false;
+            Yii::warning('TNTSearch недоступен: ' . $e->getMessage(), 'search/tnt');
         }
+
+        return $this->unavailableReason;
     }
 
     public function query(SearchQuery $searchQuery): SearchResult
@@ -257,6 +285,10 @@ final class TntSearchEngine implements SearchEngineInterface
         }
 
         $this->resetBuild();
+
+        // Индекс только что появился (или сменил слот) — проверка готовности, сделанная до этого
+        // в том же процессе, больше не действительна.
+        $this->availabilityChecked = false;
     }
 
     public function cancelRebuild(): void
