@@ -11,7 +11,14 @@
   ],
   "minimum-stability": "stable",
   "extra": {
-    "bescms": { "kind": "package" }
+    "moduleClass": "Besnovatyj\\SearchTnt\\Module",
+    "moduleId": "SearchTnt",
+    "bescms": {
+      "kind": "module"
+    },
+    "config-plugin": {
+      "common": "src/config/common.php"
+    }
   },
   "keywords": [
     "yii2",
@@ -31,11 +38,13 @@
   },
   "require": {
     "php": ">=8.4",
+    "besnovatyj/yii2-cms-contracts": "^1.0",
+    "besnovatyj/yii2-cms-kernel": "^1.0",
+    "besnovatyj/yii2-cms-search": "^1.0",
     "ext-mbstring": "*",
     "ext-pdo": "*",
-    "yiisoft/yii2": "~2.0.0",
-    "besnovatyj/yii2-cms-search": "^1.0",
-    "teamtnt/tntsearch": "^5.3"
+    "teamtnt/tntsearch": "^5.3",
+    "yiisoft/yii2": "~2.0.0"
   },
   "require-dev": {
     "roave/security-advisories": "dev-latest"

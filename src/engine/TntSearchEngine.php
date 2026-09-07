@@ -6,7 +6,7 @@
 
 declare(strict_types=1);
 
-namespace Besnovatyj\SearchTnt;
+namespace Besnovatyj\SearchTnt\engine;
 
 use Besnovatyj\Search\contracts\EngineCapabilities;
 use Besnovatyj\Search\contracts\IndexableDocument;
@@ -14,7 +14,8 @@ use Besnovatyj\Search\contracts\SearchEngineInterface;
 use Besnovatyj\Search\contracts\SearchHit;
 use Besnovatyj\Search\contracts\SearchQuery;
 use Besnovatyj\Search\contracts\SearchResult;
-use Besnovatyj\Search\services\SearchSettings;
+use Besnovatyj\Search\settings\SearchSettings;
+use Besnovatyj\SearchTnt\settings\TntSettings;
 use RuntimeException;
 use TeamTNT\TNTSearch\Indexer\TNTIndexer;
 use TeamTNT\TNTSearch\TNTSearch;
@@ -32,8 +33,8 @@ use yii\helpers\Html;
  *
  * Граница применимости. TNTSearch — чисто текстовый движок: атрибутов он не хранит и фильтровать
  * выдачу не умеет. Поэтому ядро забирает у него совпадения одним списком (не более
- * {@see MAX_MATCHES}), после чего фильтрует по разделам и режет на страницы само, опираясь на
- * собственную карту {@see DocumentTypeMap}. Для сайта в тысячи документов это честно и незаметно;
+ * {@see TntSettings::$maxMatches}), после чего фильтрует по разделам и режет на страницы само,
+ * опираясь на собственную карту {@see DocumentTypeMap}. Для сайта в тысячи документов это честно и незаметно;
  * когда типичный запрос начнёт упираться в потолок совпадений, пора переходить на ядро Manticore —
  * контракт фасада, провайдеры модулей и вёрстка выдачи при этом не меняются.
  *
@@ -52,15 +53,6 @@ final class TntSearchEngine implements SearchEngineInterface
 
     /** Таблицы, которые TNTSearch создаёт на каждый индекс. */
     private const array INDEX_TABLES = ['wordlist', 'doclist', 'fields', 'hitlist', 'info'];
-
-    /**
-     * Потолок числа совпадений, забираемых у движка за один запрос.
-     *
-     * Это и есть заявленная граница ядра: фильтр по разделам и пагинация считаются по этому
-     * списку, поэтому при более чем {@see MAX_MATCHES} совпадениях на один запрос выдача станет
-     * неполной на дальних страницах.
-     */
-    private const int MAX_MATCHES = 2000;
 
     /** Во сколько раз заголовок весомее тела текста (реализуется повтором). */
     private const int TITLE_WEIGHT = 3;
@@ -83,6 +75,7 @@ final class TntSearchEngine implements SearchEngineInterface
     public function __construct(
         private readonly TntConfigFactory $config,
         private readonly DocumentTypeMap $map,
+        private readonly TntSettings $engineSettings,
         private readonly SearchSettings $settings,
     ) {
     }
@@ -102,14 +95,13 @@ final class TntSearchEngine implements SearchEngineInterface
     }
 
     /**
-     * Ядро готово, если библиотека установлена и таблицы рабочего слота существуют.
+     * Ядро готово, если таблицы рабочего слота существуют, то есть индекс хоть раз собирали.
+     *
+     * Наличие самой библиотеки не проверяется: она объявлена жёсткой зависимостью пакета, и без
+     * неё не загрузился бы и класс модуля.
      */
     public function isAvailable(): bool
     {
-        if (!class_exists(TNTSearch::class)) {
-            return false;
-        }
-
         try {
             // Имя без плейсхолдера `{{%…}}`: таблицы индекса создаёт сама библиотека своим
             // подключением, префикс таблиц Yii к ним не применяется.
@@ -126,9 +118,9 @@ final class TntSearchEngine implements SearchEngineInterface
     public function query(SearchQuery $searchQuery): SearchResult
     {
         $tnt = $this->reader();
-        $tnt->fuzziness($this->settings->fuzzy());
+        $tnt->fuzziness($this->settings->fuzzy);
 
-        $found = $tnt->search($searchQuery->text, self::MAX_MATCHES);
+        $found = $tnt->search($searchQuery->text, $this->engineSettings->maxMatches);
 
         /** @var list<int> $ids */
         $ids = array_map('intval', $found['ids'] ?? []);
@@ -189,8 +181,6 @@ final class TntSearchEngine implements SearchEngineInterface
 
     public function beginRebuild(): void
     {
-        $this->map->ensureSchema();
-
         $slot = $this->map->buildSlot();
         $this->buildSlot = $slot;
         $this->pendingTypes = [];
@@ -216,7 +206,7 @@ final class TntSearchEngine implements SearchEngineInterface
 
         // Стеммер ставим явно тем же классом, что и при поиске: собранный другим стеммером индекс
         // молча перестал бы отвечать на запросы — совпадений просто не находилось бы.
-        $stemmerClass = $this->config->stemmerClass();
+        $stemmerClass = $this->engineSettings->stemmerClass;
         $indexer->setStemmer(new $stemmerClass());
 
         $this->indexer = $indexer;

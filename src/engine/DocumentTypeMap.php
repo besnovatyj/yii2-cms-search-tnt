@@ -6,7 +6,7 @@
 
 declare(strict_types=1);
 
-namespace Besnovatyj\SearchTnt;
+namespace Besnovatyj\SearchTnt\engine;
 
 use Yii;
 use yii\db\Connection;
@@ -24,10 +24,10 @@ use yii\db\Connection;
  * обновлением строки состояния. Так во время полной пересборки сайт продолжает искать по прежнему
  * индексу и не отдаёт пустую выдачу, а прерванная сборка не портит рабочий индекс.
  *
- * Схема создаётся самим ядром при первом обращении, а не миграцией modman: ядро — пакет, а не
- * модуль, и жизненный цикл его служебных таблиц привязан к индексу, а не к установке модуля.
- * Данные в них полностью восстановимы переиндексацией, поэтому обе таблицы можно исключать из
- * дампа базы.
+ * Схему создают миграции модуля (`migrations/`), как и у любого другого модуля системы: ядро —
+ * полноценный модуль, и его служебные таблицы появляются при установке, а не самопроизвольно при
+ * первом запросе. Данные в них полностью восстановимы переиндексацией, поэтому обе таблицы можно
+ * исключать из дампа базы.
  */
 final class DocumentTypeMap
 {
@@ -38,53 +38,17 @@ final class DocumentTypeMap
     private const string STATE_TABLE = '{{%search_tnt_state}}';
     private const string STATE_ACTIVE_SLOT = 'active_slot';
 
-    private bool $schemaChecked = false;
-
     private function db(): Connection
     {
         return Yii::$app->db;
     }
 
-    /**
-     * Создать служебные таблицы, если их ещё нет.
-     */
-    public function ensureSchema(): void
-    {
-        if ($this->schemaChecked) {
-            return;
-        }
-
-        $db = $this->db();
-        $options = 'CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci ENGINE=InnoDB';
-
-        if ($db->getTableSchema(self::MAP_TABLE, true) === null) {
-            $db->createCommand()->createTable(self::MAP_TABLE, [
-                'slot' => 'CHAR(1) NOT NULL',
-                'document_id' => 'INT NOT NULL',
-                'type' => 'VARCHAR(64) NOT NULL',
-                'PRIMARY KEY (slot, document_id)',
-                'KEY idx_search_tnt_map_type (slot, type)',
-            ], $options)->execute();
-        }
-
-        if ($db->getTableSchema(self::STATE_TABLE, true) === null) {
-            $db->createCommand()->createTable(self::STATE_TABLE, [
-                'name' => 'VARCHAR(64) NOT NULL',
-                'value' => 'VARCHAR(255) NULL',
-                'PRIMARY KEY (name)',
-            ], $options)->execute();
-        }
-
-        $this->schemaChecked = true;
-    }
 
     /**
      * Слот, по которому сейчас идёт поиск.
      */
     public function activeSlot(): string
     {
-        $this->ensureSchema();
-
         $value = $this->db()
             ->createCommand(
                 'SELECT [[value]] FROM ' . self::STATE_TABLE . ' WHERE [[name]] = :name',
@@ -108,8 +72,6 @@ final class DocumentTypeMap
      */
     public function activate(string $slot): void
     {
-        $this->ensureSchema();
-
         $this->db()->createCommand()->upsert(
             self::STATE_TABLE,
             ['name' => self::STATE_ACTIVE_SLOT, 'value' => $slot],
@@ -122,8 +84,6 @@ final class DocumentTypeMap
      */
     public function clear(string $slot): void
     {
-        $this->ensureSchema();
-
         $this->db()->createCommand()->delete(self::MAP_TABLE, ['slot' => $slot])->execute();
     }
 
@@ -137,8 +97,6 @@ final class DocumentTypeMap
         if ($documentTypes === []) {
             return;
         }
-
-        $this->ensureSchema();
 
         $rows = [];
         foreach ($documentTypes as $documentId => $type) {
@@ -158,8 +116,6 @@ final class DocumentTypeMap
      */
     public function put(string $slot, int $documentId, string $type): void
     {
-        $this->ensureSchema();
-
         $this->db()->createCommand()->upsert(
             self::MAP_TABLE,
             ['slot' => $slot, 'document_id' => $documentId, 'type' => $type],
@@ -172,8 +128,6 @@ final class DocumentTypeMap
      */
     public function remove(string $slot, int $documentId): void
     {
-        $this->ensureSchema();
-
         $this->db()->createCommand()
             ->delete(self::MAP_TABLE, ['slot' => $slot, 'document_id' => $documentId])
             ->execute();
@@ -190,8 +144,6 @@ final class DocumentTypeMap
         if ($documentIds === []) {
             return [];
         }
-
-        $this->ensureSchema();
 
         $rows = $this->db()->createCommand(
             'SELECT [[document_id]], [[type]] FROM ' . self::MAP_TABLE

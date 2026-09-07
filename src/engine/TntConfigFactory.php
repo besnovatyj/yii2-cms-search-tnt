@@ -6,12 +6,11 @@
 
 declare(strict_types=1);
 
-namespace Besnovatyj\SearchTnt;
+namespace Besnovatyj\SearchTnt\engine;
 
+use Besnovatyj\SearchTnt\settings\TntSettings;
 use RuntimeException;
 use TeamTNT\TNTSearch\Engines\MysqlEngine;
-use TeamTNT\TNTSearch\Stemmer\PorterStemmer;
-use TeamTNT\TNTSearch\Stemmer\RussianStemmer;
 use Yii;
 use yii\base\Exception;
 use yii\helpers\FileHelper;
@@ -23,14 +22,18 @@ use yii\helpers\FileHelper;
  * и контент, и второй набор кредов означал бы второй секрет в проде и второй способ ошибиться.
  * DSN разбирается ровно на те поля, которые ждёт TNTSearch.
  *
- * Стеммер выбирается по языку приложения. Он «запекается» в индекс на этапе индексации, поэтому
- * смена языка сайта требует полной пересборки — фасад сообщит об этом на странице состояния,
- * когда сравнит ядро и метку сборки.
+ * Стеммер берётся из настроек ядра (там же разрешается вариант «по языку сайта»). Он «запекается»
+ * в индекс на этапе индексации, поэтому смена стеммера требует полной пересборки — фасад сообщит
+ * об этом на странице состояния, когда сравнит ядро и метку сборки.
  */
 final class TntConfigFactory
 {
     /** Каталог для служебных файлов TNTSearch (при MySQL-движке практически не используется). */
     private const string STORAGE_ALIAS = '@runtime/tntsearch';
+
+    public function __construct(private readonly TntSettings $settings)
+    {
+    }
 
     /**
      * @return array<string, mixed> конфиг для `TNTSearch::loadConfig()`
@@ -58,25 +61,9 @@ final class TntConfigFactory
             'password' => (string)$db->password,
             'charset' => $db->charset ?? 'utf8mb4',
             'storage' => $this->storagePath(),
-            'stemmer' => $this->stemmerClass(),
+            'stemmer' => $this->settings->stemmerClass,
             'engine' => MysqlEngine::class,
         ];
-    }
-
-    /**
-     * Класс стеммера по языку приложения.
-     *
-     * Русский Snowball отсекает окончания («ботинки» → «ботинк»), чего достаточно для падежей и
-     * чисел. Смены основы («люди» → «человек») он не делает — это умеет только лемматизатор,
-     * которого в TNTSearch нет; за ним нужно ядро Manticore.
-     *
-     * @return class-string
-     */
-    public function stemmerClass(): string
-    {
-        return str_starts_with(Yii::$app->language, 'ru')
-            ? RussianStemmer::class
-            : PorterStemmer::class;
     }
 
     /**
