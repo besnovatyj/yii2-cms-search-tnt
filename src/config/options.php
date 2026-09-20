@@ -23,8 +23,9 @@ declare(strict_types=1);
 return [
     'search_tnt_morphology' => [
         'path'        => 'modules.SearchTnt.params.morphology',
-        'label'       => '[Поиск: TNTSearch] Стеммер',
+        'label'       => 'Стеммер',
         'description' => 'После смены нужна полная переиндексация',
+        'group'       => 'TNTSearch',
         'category'    => 'Search',
         'rules'       => [
             ['required'],
@@ -43,8 +44,9 @@ return [
 
     'search_tnt_max_matches' => [
         'path'        => 'modules.SearchTnt.params.maxMatches',
-        'label'       => '[Поиск: TNTSearch] Окно совпадений',
+        'label'       => 'Окно совпадений',
         'description' => 'Сколько совпадений ядро забирает за запрос: глубина листания и точность вкладок',
+        'group'       => 'TNTSearch',
         'category'    => 'Search',
         'rules'       => [
             ['required'],
