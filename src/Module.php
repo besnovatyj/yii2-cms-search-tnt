@@ -37,14 +37,12 @@ class Module extends CmsModule implements
     SearchEngineProvider
 {
     public const bool EDITABLE = true;
-    public const string VERSION = '1.0.0';
     public const string MODULE_ID = 'SearchTnt';
 
     /** Ключ ядра в настройках и в метке «каким ядром собран индекс». */
     public const string ENGINE_KEY = 'tnt';
 
     public static function moduleId(): string { return self::MODULE_ID; }
-    public static function moduleVersion(): string { return self::VERSION; }
     public static function isEditable(): bool { return self::EDITABLE; }
     public static function moduleConfig(): array { return require __DIR__ . '/config/config.php'; }
     public static function options(): array { return require __DIR__ . '/config/options.php'; }
