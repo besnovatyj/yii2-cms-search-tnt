@@ -36,6 +36,9 @@ final class DocumentTypeMap
 
     private const string MAP_TABLE = '{{%search_tnt_map}}';
     private const string STATE_TABLE = '{{%search_tnt_state}}';
+
+    /** Служебные таблицы ядра — для подсчёта занимаемого места. */
+    public const array TABLES = [self::MAP_TABLE, self::STATE_TABLE];
     private const string STATE_ACTIVE_SLOT = 'active_slot';
 
     private function db(): Connection
@@ -85,6 +88,18 @@ final class DocumentTypeMap
     public function clear(string $slot): void
     {
         $this->db()->createCommand()->delete(self::MAP_TABLE, ['slot' => $slot])->execute();
+    }
+
+    /**
+     * Стереть карту всех слотов и состояние: рабочим снова становится слот по умолчанию.
+     *
+     * Для полной очистки индекса ({@see TntSearchEngine::purge()}). TRUNCATE карты, а не DELETE:
+     * данные восстановимы пересборкой, а место таблица отдаёт сразу.
+     */
+    public function purge(): void
+    {
+        $this->db()->createCommand()->truncateTable(self::MAP_TABLE)->execute();
+        $this->db()->createCommand()->delete(self::STATE_TABLE)->execute();
     }
 
     /**

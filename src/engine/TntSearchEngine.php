@@ -10,10 +10,12 @@ namespace Besnovatyj\SearchTnt\engine;
 
 use Besnovatyj\Search\contracts\EngineCapabilities;
 use Besnovatyj\Search\contracts\IndexableDocument;
+use Besnovatyj\Search\contracts\PurgeableEngine;
 use Besnovatyj\Search\contracts\SearchEngineInterface;
 use Besnovatyj\Search\contracts\SearchHit;
 use Besnovatyj\Search\contracts\SearchQuery;
 use Besnovatyj\Search\contracts\SearchResult;
+use Besnovatyj\Search\services\IndexPurger;
 use Besnovatyj\Search\settings\SearchSettings;
 use Besnovatyj\SearchTnt\settings\TntSettings;
 use RuntimeException;
@@ -46,7 +48,7 @@ use yii\helpers\Html;
  * ключевые слова повторяются в индексируемой строке. Приём грубый, но работает на самой механике
  * BM25 и не требует лезть во внутренности библиотеки.
  */
-final class TntSearchEngine implements SearchEngineInterface
+final class TntSearchEngine implements SearchEngineInterface, PurgeableEngine
 {
     /** Префикс имён таблиц индекса; полное имя — префикс + слот. */
     private const string INDEX_PREFIX = 'bescms_search_';
@@ -330,6 +332,40 @@ final class TntSearchEngine implements SearchEngineInterface
         $tnt->getIndex()->delete($documentId);
 
         $this->map->remove($slot, $documentId);
+    }
+
+    /**
+     * Стереть индекс целиком: таблицы обоих слотов, карту разделов и переключатель слотов.
+     *
+     * Оба слота, а не только рабочий: свободный слот может хранить недособранный индекс после
+     * прерванной пересборки. После вызова ядро в том же состоянии, что сразу после установки.
+     */
+    public function purge(): void
+    {
+        foreach ([DocumentTypeMap::SLOT_A, DocumentTypeMap::SLOT_B] as $slot) {
+            $this->dropIndexTables($slot);
+        }
+
+        $this->map->purge();
+        $this->resetBuild();
+        $this->availabilityChecked = false;
+    }
+
+    /**
+     * Размер таблиц индекса обоих слотов и служебных таблиц ядра.
+     */
+    public function storageBytes(): ?int
+    {
+        $tables = DocumentTypeMap::TABLES;
+
+        foreach ([DocumentTypeMap::SLOT_A, DocumentTypeMap::SLOT_B] as $slot) {
+            foreach (self::INDEX_TABLES as $suffix) {
+                // Без `{{%…}}`: см. комментарий в isAvailable() — префикс таблиц Yii здесь не участвует.
+                $tables[] = $this->indexName($slot) . '_' . $suffix;
+            }
+        }
+
+        return IndexPurger::tablesBytes(Yii::$app->db, $tables);
     }
 
     /**
